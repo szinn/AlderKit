@@ -7,6 +7,46 @@ Use only `jj` commands for all version control operations.
 
 ## commands
 
+- **Build**: `mise run build`
+- **Format**: `mise run fmt`
+- **Lint**: `mise run lint`
+- **Tests**: `mise run test`
+- **Insta tests**: `mise run insta`
+
+## Workflows
+
+**Multi-step implementations:** Each logical step **MUST** be its own jj changeset. Before
+starting a step, ensure the working copy is empty (`jj new` if needed). At the end of each
+step, run the end-of-task routine below.
+
+**After completing each task (end-of-task routine):**
+
+These **MUST** be run as separate Bash commands. Do **NOT** join them into a single one with `&&`.
+
+1. `mise run fmt-lint` — format code
+2. `mise run test` — verify tests pass
+3. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
+
+### Workspaces
+
+When creating a new workspace, run
+
+```bash
+direnv allow
+mise trust
+```
+
+To verify the baseline state, run `mise run test`.
+
+## Testing
+
+- Tests live alongside source code in `#[cfg(test)]` modules
+
+## Conventions
+
+- **Commits:** Valid scopes: match crate names
+- **Error handling:** `thiserror` for all library crates; `anyhow` for binaries
+
 ## Insights
 
 This project uses `.insights/` for research, triage docs, specs, plans, and personal notes

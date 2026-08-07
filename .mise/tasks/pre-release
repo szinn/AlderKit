@@ -1,0 +1,10 @@
+#!/usr/bin/env fish
+#MISE description="Run Pre-release checks"
+
+mise run fmt-lint
+mise run test
+
+for crate in $ALDERKIT_CRATES
+  cargo package -p $crate --list      # verify shipped file set
+  cargo publish -p $crate --dry-run   # validates metadata, doesn't upload
+end

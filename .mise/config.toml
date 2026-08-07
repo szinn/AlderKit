@@ -1,3 +1,6 @@
+[env]
+ALDERKIT_CRATES = "alderkit-token"
+
 [tools]
 "cargo:cargo-audit" = "0.22.2"
 "cargo:cargo-deny" = "0.20.2"
