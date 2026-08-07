@@ -4,21 +4,63 @@ use rand::RngExt;
 use serde::{Deserialize, Serialize, de};
 use thiserror::Error;
 
-/// Base-32 alphabet excluding visually ambiguous characters (I, L, O, Q).
-const ALPHABET: &[u8; 32] = b"Y4XK0N8AR3G6JM2VT9BS5WC1DPH7EUZF";
-
-/// Reverse lookup table: ASCII byte → alphabet index (or `0xFF` for invalid).
-/// Covers the full range `0..=b'Z'` (91 entries).
-#[expect(clippy::cast_possible_truncation, reason = "ALPHABET has 32 entries; i is 0..31, always fits u8")]
-const DECODE_TABLE: [u8; 91] = {
+/// Build a reverse lookup table (ASCII byte → alphabet index, or `0xFF` for
+/// invalid) for a given base-32 alphabet. Covers the full range `0..=b'Z'`
+/// (91 entries).
+#[expect(clippy::cast_possible_truncation, reason = "alphabet has 32 entries; i is 0..31, always fits u8")]
+const fn build_decode_table(alphabet: &[u8; 32]) -> [u8; 91] {
     let mut table = [0xFF_u8; 91];
     let mut i = 0;
-    while i < ALPHABET.len() {
-        table[ALPHABET[i] as usize] = i as u8;
+    while i < alphabet.len() {
+        table[alphabet[i] as usize] = i as u8;
         i += 1;
     }
     table
-};
+}
+
+/// Panics unless `alphabet` contains exactly 32 distinct ASCII bytes, each no
+/// greater than `b'Z'` (so it fits within [`build_decode_table`]'s range).
+/// Intended to be called from a `const` context, turning an invalid alphabet
+/// into a compile error.
+#[doc(hidden)]
+pub const fn __assert_valid_alphabet(alphabet: &[u8; 32]) {
+    let mut i = 0;
+    while i < 32 {
+        let byte = alphabet[i];
+        assert!(byte.is_ascii(), "alphabet must contain only ASCII bytes");
+        assert!(byte <= b'Z', "alphabet bytes must not exceed 'Z'");
+        let mut j = i + 1;
+        while j < 32 {
+            assert!(byte != alphabet[j], "alphabet must contain 32 distinct bytes");
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+/// Trait that defines the base-32 alphabet used to encode and decode token
+/// IDs.
+///
+/// [`DefaultAlphabet`] is the built-in alphabet and is used unless a [`Token`]
+/// names a different one. Custom alphabets should be defined with the
+/// [`define_alphabet!`] macro, which validates them at compile time.
+pub trait Alphabet: fmt::Debug + Clone + PartialEq + Eq {
+    /// 32 distinct ASCII bytes (each `<= b'Z'`) used as the encoding alphabet.
+    const ALPHABET: &'static [u8; 32];
+
+    /// Reverse lookup table derived from [`Self::ALPHABET`].
+    const DECODE_TABLE: [u8; 91] = build_decode_table(Self::ALPHABET);
+}
+
+/// Base-32 alphabet excluding visually ambiguous characters (I, L, O, Q).
+///
+/// The default [`Alphabet`] used by [`Token`] when none is specified.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DefaultAlphabet;
+
+impl Alphabet for DefaultAlphabet {
+    const ALPHABET: &'static [u8; 32] = b"Y4XK0N8AR3G6JM2VT9BS5WC1DPH7EUZF";
+}
 
 /// Trait that defines the prefix for a token kind.
 pub trait TokenPrefix: fmt::Debug + Clone + PartialEq + Eq {
@@ -34,15 +76,17 @@ pub trait TokenId: Copy + PartialEq + Eq + Hash + fmt::Debug {
     const ENCODED_LEN: usize;
 
     /// Encode this value into a base-32 string of [`Self::ENCODED_LEN`]
-    /// characters.
-    fn encode(self) -> String;
+    /// characters, using alphabet `A`.
+    fn encode<A: Alphabet>(self) -> String;
 
-    /// Encode this value directly into a byte buffer. The buffer must be
-    /// exactly [`Self::ENCODED_LEN`] bytes. All bytes will be valid ASCII.
-    fn encode_to_buf(self, buf: &mut [u8]);
+    /// Encode this value directly into a byte buffer, using alphabet `A`.
+    /// The buffer must be exactly [`Self::ENCODED_LEN`] bytes. All bytes
+    /// will be valid ASCII.
+    fn encode_to_buf<A: Alphabet>(self, buf: &mut [u8]);
 
-    /// Decode a base-32 string back into this numeric type.
-    fn decode(s: &str) -> Result<Self, TokenError>;
+    /// Decode a base-32 string back into this numeric type, using alphabet
+    /// `A`.
+    fn decode<A: Alphabet>(s: &str) -> Result<Self, TokenError>;
 
     /// Generate a random value in `1..=max` where `max` is provided as a
     /// `u128` (from the const generic on [`Token`]).
@@ -62,25 +106,25 @@ impl TokenId for u64 {
         rand::rng().random_range(1..=max_u64)
     }
 
-    fn encode(self) -> String {
+    fn encode<A: Alphabet>(self) -> String {
         let mut buf = [0u8; Self::ENCODED_LEN];
-        self.encode_to_buf(&mut buf);
+        self.encode_to_buf::<A>(&mut buf);
         String::from_utf8(buf.to_vec()).expect("alphabet is ASCII")
     }
 
-    fn encode_to_buf(self, buf: &mut [u8]) {
+    fn encode_to_buf<A: Alphabet>(self, buf: &mut [u8]) {
         let mut remaining = self;
         for i in (0..Self::ENCODED_LEN).rev() {
-            buf[i] = ALPHABET[(remaining & 0x1F) as usize];
+            buf[i] = A::ALPHABET[(remaining & 0x1F) as usize];
             remaining >>= 5;
         }
     }
 
-    fn decode(s: &str) -> Result<Self, TokenError> {
+    fn decode<A: Alphabet>(s: &str) -> Result<Self, TokenError> {
         let mut value: Self = 0;
         for ch in s.chars() {
             let byte = ch as usize;
-            let idx = if byte < DECODE_TABLE.len() { DECODE_TABLE[byte] } else { 0xFF };
+            let idx = if byte < A::DECODE_TABLE.len() { A::DECODE_TABLE[byte] } else { 0xFF };
             if idx == 0xFF {
                 return Err(TokenError::InvalidCharacter(ch));
             }
@@ -98,25 +142,25 @@ impl TokenId for u128 {
         rand::rng().random_range(1..=max)
     }
 
-    fn encode(self) -> String {
+    fn encode<A: Alphabet>(self) -> String {
         let mut buf = [0u8; Self::ENCODED_LEN];
-        self.encode_to_buf(&mut buf);
+        self.encode_to_buf::<A>(&mut buf);
         String::from_utf8(buf.to_vec()).expect("alphabet is ASCII")
     }
 
-    fn encode_to_buf(self, buf: &mut [u8]) {
+    fn encode_to_buf<A: Alphabet>(self, buf: &mut [u8]) {
         let mut remaining = self;
         for i in (0..Self::ENCODED_LEN).rev() {
-            buf[i] = ALPHABET[(remaining & 0x1F) as usize];
+            buf[i] = A::ALPHABET[(remaining & 0x1F) as usize];
             remaining >>= 5;
         }
     }
 
-    fn decode(s: &str) -> Result<Self, TokenError> {
+    fn decode<A: Alphabet>(s: &str) -> Result<Self, TokenError> {
         let mut value: Self = 0;
         for ch in s.chars() {
             let byte = ch as usize;
-            let idx = if byte < DECODE_TABLE.len() { DECODE_TABLE[byte] } else { 0xFF };
+            let idx = if byte < A::DECODE_TABLE.len() { A::DECODE_TABLE[byte] } else { 0xFF };
             if idx == 0xFF {
                 return Err(TokenError::InvalidCharacter(ch));
             }
@@ -135,12 +179,12 @@ impl TokenId for u128 {
 /// via [`Token::generate`]. This allows token types to cap their range (e.g.
 /// to `i64::MAX` for database-safe storage) without changing the backing type.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Token<P: TokenPrefix, I: TokenId = u64, const MAX: u128 = { u64::MAX as u128 }> {
+pub struct Token<P: TokenPrefix, I: TokenId = u64, A: Alphabet = DefaultAlphabet, const MAX: u128 = { u64::MAX as u128 }> {
     id: I,
-    _marker: PhantomData<P>,
+    _marker: PhantomData<(P, A)>,
 }
 
-impl<P: TokenPrefix, I: TokenId, const MAX: u128> fmt::Debug for Token<P, I, MAX> {
+impl<P: TokenPrefix, I: TokenId, A: Alphabet, const MAX: u128> fmt::Debug for Token<P, I, A, MAX> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Token({self})")
     }
@@ -162,7 +206,7 @@ pub enum TokenError {
     Overflow,
 }
 
-impl<P: TokenPrefix, I: TokenId, const MAX: u128> Token<P, I, MAX> {
+impl<P: TokenPrefix, I: TokenId, A: Alphabet, const MAX: u128> Token<P, I, A, MAX> {
     /// Create a token from a numeric ID.
     pub fn new(id: I) -> Self {
         Self { id, _marker: PhantomData }
@@ -193,7 +237,7 @@ impl<P: TokenPrefix, I: TokenId, const MAX: u128> Token<P, I, MAX> {
             });
         }
 
-        let id = I::decode(encoded)?;
+        let id = I::decode::<A>(encoded)?;
         Ok(Self::new(id))
     }
 
@@ -206,7 +250,7 @@ impl<P: TokenPrefix, I: TokenId, const MAX: u128> Token<P, I, MAX> {
     ///
     /// This is the inverse of [`Token::from_encoded_id`].
     pub fn encoded_id(&self) -> String {
-        self.id.encode()
+        self.id.encode::<A>()
     }
 
     /// Parse a token from the encoded portion alone (no prefix).
@@ -221,7 +265,7 @@ impl<P: TokenPrefix, I: TokenId, const MAX: u128> Token<P, I, MAX> {
                 found: P::PREFIX.len() + s.len(),
             });
         }
-        let id = I::decode(s)?;
+        let id = I::decode::<A>(s)?;
         Ok(Self::new(id))
     }
 
@@ -232,17 +276,17 @@ impl<P: TokenPrefix, I: TokenId, const MAX: u128> Token<P, I, MAX> {
     }
 }
 
-impl<P: TokenPrefix, I: TokenId, const MAX: u128> fmt::Display for Token<P, I, MAX> {
+impl<P: TokenPrefix, I: TokenId, A: Alphabet, const MAX: u128> fmt::Display for Token<P, I, A, MAX> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(P::PREFIX)?;
         let mut buf = [0u8; 26]; // max encoded length (u128)
         let buf = &mut buf[..I::ENCODED_LEN];
-        self.id.encode_to_buf(buf);
+        self.id.encode_to_buf::<A>(buf);
         f.write_str(std::str::from_utf8(buf).expect("alphabet is ASCII"))
     }
 }
 
-impl<P: TokenPrefix, I: TokenId, const MAX: u128> FromStr for Token<P, I, MAX> {
+impl<P: TokenPrefix, I: TokenId, A: Alphabet, const MAX: u128> FromStr for Token<P, I, A, MAX> {
     type Err = TokenError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -250,13 +294,13 @@ impl<P: TokenPrefix, I: TokenId, const MAX: u128> FromStr for Token<P, I, MAX> {
     }
 }
 
-impl<P: TokenPrefix, I: TokenId, const MAX: u128> Serialize for Token<P, I, MAX> {
+impl<P: TokenPrefix, I: TokenId, A: Alphabet, const MAX: u128> Serialize for Token<P, I, A, MAX> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.collect_str(self)
     }
 }
 
-impl<'de, P: TokenPrefix, I: TokenId, const MAX: u128> Deserialize<'de> for Token<P, I, MAX> {
+impl<'de, P: TokenPrefix, I: TokenId, A: Alphabet, const MAX: u128> Deserialize<'de> for Token<P, I, A, MAX> {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
         Self::parse(&s).map_err(de::Error::custom)
@@ -286,6 +330,36 @@ macro_rules! define_token_prefix {
 
         impl $crate::token::TokenPrefix for $name {
             const PREFIX: &'static str = $prefix;
+        }
+    };
+}
+
+/// Define a custom [`Alphabet`] type from a 32-byte base-32 alphabet.
+///
+/// The alphabet is validated at compile time: it must contain exactly 32
+/// distinct ASCII bytes, each no greater than `b'Z'`. An invalid alphabet
+/// fails the build rather than misbehaving at runtime.
+///
+/// # Example
+///
+/// ```
+/// use alderkit_token::{define_alphabet, define_token_prefix, token::Token};
+///
+/// define_alphabet!(MyAlphabet, b"0123456789ABCDEFGHJKMNPQRSTVWXYZ");
+/// define_token_prefix!(UserPrefix, "U_");
+/// type UserToken = Token<UserPrefix, u64, MyAlphabet>;
+/// ```
+#[macro_export]
+macro_rules! define_alphabet {
+    ($name:ident, $alphabet:expr) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct $name;
+
+        impl $crate::token::Alphabet for $name {
+            const ALPHABET: &'static [u8; 32] = {
+                $crate::token::__assert_valid_alphabet($alphabet);
+                $alphabet
+            };
         }
     };
 }
@@ -515,7 +589,7 @@ mod tests {
     // --- custom MAX tests ---
 
     define_token_prefix!(CappedPrefix, "C_");
-    type CappedToken = Token<CappedPrefix, u64, { i64::MAX as u128 }>;
+    type CappedToken = Token<CappedPrefix, u64, DefaultAlphabet, { i64::MAX as u128 }>;
 
     #[test]
     fn capped_generate_respects_max() {
@@ -524,5 +598,89 @@ mod tests {
             assert!(token.id() >= 1);
             i64::try_from(token.id()).unwrap();
         }
+    }
+
+    // --- custom alphabet tests ---
+
+    // The default alphabet, reversed. Being a permutation of the default
+    // guarantees 32 distinct ASCII bytes without duplicating validation logic.
+    define_alphabet!(ReversedAlphabet, b"FZUE7HPD1CW5SB9TV2MJ6G3RA8N0KX4Y");
+
+    define_token_prefix!(AlphaPrefix, "A_");
+    type AlphaToken = Token<AlphaPrefix, u64, ReversedAlphabet>;
+
+    #[test]
+    fn custom_alphabet_round_trip() {
+        for id in [0, 1, 42, 1000, 123_456_789, u64::MAX] {
+            let token = AlphaToken::new(id);
+            let s = token.to_string();
+            let parsed = AlphaToken::parse(&s).unwrap();
+            assert_eq!(parsed.id(), id);
+        }
+    }
+
+    #[test]
+    fn custom_alphabet_zero_encodes_to_its_first_char() {
+        let token = AlphaToken::new(0);
+        assert_eq!(token.to_string(), "A_FFFFFFFFFFFFF");
+    }
+
+    #[test]
+    fn custom_alphabet_known_value_encoding() {
+        let token = AlphaToken::new(1);
+        let s = token.to_string();
+        assert_eq!(s, "A_FFFFFFFFFFFFZ");
+    }
+
+    #[test]
+    fn custom_alphabet_differs_from_default_encoding() {
+        let default_token = TestToken::new(42);
+        let custom_token = AlphaToken::new(42);
+        assert_ne!(default_token.encoded_id(), custom_token.encoded_id());
+    }
+
+    #[test]
+    fn custom_alphabet_rejects_default_alphabet_characters_not_in_it() {
+        // 'Y' is the first char of the *default* alphabet but is present in
+        // ReversedAlphabet too (it's a permutation), so instead check that a
+        // character truly absent from the base-32 alphabet space is rejected.
+        let err = AlphaToken::parse("A_FFFFFFFFFFFFI").unwrap_err();
+        assert_eq!(err, TokenError::InvalidCharacter('I'));
+    }
+
+    #[test]
+    fn default_alphabet_is_default_type_parameter() {
+        // Token<P, I> (no third parameter) must be identical to
+        // Token<P, I, DefaultAlphabet>.
+        let a: Token<TestPrefix, u64> = Token::new(7);
+        let b: Token<TestPrefix, u64, DefaultAlphabet> = Token::new(7);
+        assert_eq!(a.to_string(), b.to_string());
+    }
+
+    #[test]
+    fn assert_valid_alphabet_accepts_default_alphabet() {
+        super::__assert_valid_alphabet(DefaultAlphabet::ALPHABET);
+    }
+
+    #[test]
+    #[should_panic(expected = "distinct")]
+    fn assert_valid_alphabet_rejects_duplicate_bytes() {
+        super::__assert_valid_alphabet(b"YYXK0N8AR3G6JM2VT9BS5WC1DPH7EUZF");
+    }
+
+    #[test]
+    #[should_panic(expected = "ASCII")]
+    fn assert_valid_alphabet_rejects_non_ascii_byte() {
+        let mut bad = *DefaultAlphabet::ALPHABET;
+        bad[0] = 200;
+        super::__assert_valid_alphabet(&bad);
+    }
+
+    #[test]
+    #[should_panic(expected = "'Z'")]
+    fn assert_valid_alphabet_rejects_byte_above_z() {
+        let mut bad = *DefaultAlphabet::ALPHABET;
+        bad[0] = b'a';
+        super::__assert_valid_alphabet(&bad);
     }
 }
