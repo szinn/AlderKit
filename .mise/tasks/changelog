@@ -1,0 +1,4 @@
+#!/usr/bin/env fish
+jj sync
+RUST_LOG= git-cliff --config .config/cliff.toml > CHANGELOG.md
+mise run fmt

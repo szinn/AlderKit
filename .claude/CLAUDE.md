@@ -5,6 +5,8 @@
 This is a **jj (jujutsu) repo**. Never use git commands (including `git worktree`).
 Use only `jj` commands for all version control operations.
 
+## commands
+
 ## Insights
 
 This project uses `.insights/` for research, triage docs, specs, plans, and personal notes
@@ -17,9 +19,9 @@ skill to orchestrate both and save a research document.
 
 Directory layout:
 
-- `.insights/issues/` — triage documents (IB-XX-triage-*.md)
-- `.insights/shared/specs/` — specs (IB-XX-spec-*.md)
-- `.insights/shared/plans/` — plans (IB-XX-plan-*.md)
+- `.insights/issues/` — triage documents (IB-XX-triage-\*.md)
+- `.insights/shared/specs/` — specs (IB-XX-spec-\*.md)
+- `.insights/shared/plans/` — plans (IB-XX-plan-\*.md)
 - `.insights/shared/research/` — research documents
 - `.insights/scotte/` — personal notes
 - `.insights/searchable/` — hardlink mirror for grep/search (read-only; strip "searchable/"
