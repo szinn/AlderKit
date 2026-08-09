@@ -11,7 +11,7 @@ Use only `jj` commands for all version control operations.
 - **Format**: `mise run fmt`
 - **Lint**: `mise run lint`
 - **Tests**: `mise run test`
-- **Insta tests**: `mise run insta`
+- **Review insta snapshots**: `mise run insta-review`
 
 ## Workflows
 
