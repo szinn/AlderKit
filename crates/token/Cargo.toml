@@ -1,6 +1,7 @@
 [package]
 name = "alderkit-token"
 description = "AlderKit Token"
+readme = "README.md"
 autotests = false
 
 version = "0.1.0"
@@ -8,7 +9,6 @@ edition = { workspace = true }
 rust-version = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
-readme = { workspace = true }
 keywords = ["token", "id", "base32", "prefixed-id", "identifier"]
 categories = ["encoding", "data-structures"]
 
