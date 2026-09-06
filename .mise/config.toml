@@ -6,7 +6,7 @@ ALDERKIT_CRATES = "alderkit-token"
 "cargo:cargo-deny" = "0.20.2"
 "cargo:cargo-insta" = "1.48.0"
 "cargo:cargo-nextest" = "0.9.143"
-"git-cliff" = "2.13.1"
+"git-cliff" = "2.14.1"
 "prettier" = "3.9.6"
 
 [tasks.fmt-code]
