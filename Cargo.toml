@@ -3,17 +3,12 @@ resolver = "3"
 members = ["crates/token"]
 
 [workspace.package]
-version = "0.1.2"
 edition = "2024"
 rust-version = "1.95"
-description = "A Collection of Rust Utility Crates"
-readme = "README.md"
 repository = "https://github.com/szinn/AlderKit"
 license = "MIT"
 
 [workspace.dependencies]
-alderkit-token = { path = "crates/token" }
-
 thiserror = "2.0.20"
 rand = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -93,7 +88,7 @@ struct_excessive_bools = "allow"
 must_use_candidate = "allow"
 too_many_arguments = "allow"
 case_sensitive_file_extension_comparisons = "allow"
-allow-attributes-without-reason = "allow"
+allow_attributes_without_reason = "allow"
 empty_structs_with_brackets = "allow"
 extra_unused_lifetimes = "allow"
 
