@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4](https://github.com/szinn/AlderKit/compare/v0.1.3..v0.1.4) - 2026-09-25
+
+### Miscellaneous Tasks
+
+- Move renovates to Friday - ([bf70237](https://github.com/szinn/AlderKit/commit/bf702371f7998c86db1ba7a3eb36ae8965591d21))
+
 ## [0.1.3](https://github.com/szinn/AlderKit/compare/v0.1.2..v0.1.3) - 2026-09-20
 
 ### Miscellaneous Tasks
