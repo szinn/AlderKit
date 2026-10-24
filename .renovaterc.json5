@@ -33,7 +33,8 @@
       addLabels: ["dependency"],
       commitMessageTopic: "Crate {{depName}}",
       semanticCommitScope: "deps",
-      rangeStrategy: "bump"
+      // Only touch Cargo.toml for incompatible bumps so compatible updates don't trigger crate releases
+      rangeStrategy: "update-lockfile"
     },
     {
       matchDatasources: ["docker"],
