@@ -14,8 +14,9 @@ jobs:
   release-pr:
     name: Release PR
     runs-on: ubuntu-latest
+    # One run at a time; a burst of pushes collapses into a single pending run
     concurrency:
-      group: release-plz-${{ github.ref }}
+      group: release-plz-pr-${{ github.ref }}
       cancel-in-progress: false
     steps:
       - name: Load Secrets
@@ -35,9 +36,12 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
+      # Use the latest main rather than the triggering commit, so a run queued behind a
+      # release PR merge doesn't reopen that release from stale code
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: main
           fetch-depth: 0
           token: "${{ steps.app-token.outputs.token }}"
 
@@ -59,6 +63,10 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    # Never publish from two runs at once
+    concurrency:
+      group: release-plz-release-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - name: Load Secrets
         id: load-secrets
