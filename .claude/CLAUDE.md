@@ -26,7 +26,14 @@ reported on its own.
 
 1. `mise run fmt-lint` — format and lint (clippy)
 2. `mise run test` — verify tests pass
-3. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
+3. Update the working-copy description, with a real blank line between subject and body
+   (`\n` inside double quotes stays a literal backslash-n):
+
+   ```bash
+   jj desc -m "type(scope): description
+
+   body"
+   ```
 
 ### Workspaces
 
