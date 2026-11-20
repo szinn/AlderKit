@@ -15,15 +15,16 @@ Use only `jj` commands for all version control operations.
 
 ## Workflows
 
-**Multi-step implementations:** Each logical step **MUST** be its own jj changeset. Before
+**Multi-step implementations:** Each logical step is its own jj changeset. Before
 starting a step, ensure the working copy is empty (`jj new` if needed). At the end of each
 step, run the end-of-task routine below.
 
 **After completing each task (end-of-task routine):**
 
-These **MUST** be run as separate Bash commands. Do **NOT** join them into a single one with `&&`.
+Run these as three separate Bash commands, not chained with `&&`, so each step's result is
+reported on its own.
 
-1. `mise run fmt-lint` — format code
+1. `mise run fmt-lint` — format and lint (clippy)
 2. `mise run test` — verify tests pass
 3. `jj desc -m "type(scope): description\n\nbody"` — update working copy description
 
